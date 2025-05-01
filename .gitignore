@@ -1,2 +1,91 @@
 isRankingRobust/
 isRankingRobust_backup/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# PyInstaller
+*.spec
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Pyre type checker
+.pyre/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pytest
+.cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Logs and local databases
+*.log
+*.sqlite
+*.db
+
+# Unit test / coverage reports
+.tox/
+.nox/
+.pytest_cache/
+
+# VS Code and other editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter notebook metadata
+*.nbconvert.ipynb
+
+# Ignore local data, models, and outputs
+data/
+models/
+outputs/
+*.h5
+*.ckpt
+*.pt
+*.pth
+
+# Misc
+.DS_Store
+*.bak
+*.tmp
