@@ -5,6 +5,42 @@ from matplotlib import pyplot as plt
 from sklearn.linear_model import LogisticRegression
 
 
+
+
+def make_BT_design_matrix(
+    df: pd.DataFrame
+) -> tuple[np.array, np.array, dict]:
+    '''
+    Given a preference dataset, make it a logistic regression
+    Arg:
+        df: a pd.dataframe with first column being first team, second column to be second team and third indicating whether first team wins
+    Return:
+        X: design matrix X
+        y: responses
+        player_to_id: encoder of teams, with the 0th team to have a score of 0
+    '''
+    all_players = pd.concat([df.iloc[:, 0], df.iloc[:, 1]])
+    all_players = pd.concat([df.iloc[:, 0], df.iloc[:, 1]])
+
+
+    unique_players = all_players.unique()
+
+    player_to_id = {player: idx for idx, player in enumerate(unique_players)}
+
+    n_players = len(player_to_id)
+    n_matches = df.shape[0]
+
+    encoded_player1 = df.iloc[:, 0].map(player_to_id)
+    encoded_player2 = df.iloc[:, 1].map(player_to_id)
+    matches = np.arange(n_matches)
+    X_tmp = np.zeros((n_matches, n_players))
+    X_tmp[matches, encoded_player1] = 1
+    X_tmp[matches, encoded_player2] = -1
+    X = X_tmp[:,1:]
+    y = np.array(df.iloc[:,2])
+    return X, y, player_to_id
+
+
 def run_logistic_regression(
     X: np.ndarray,
     y: np.ndarray,
@@ -25,6 +61,7 @@ def compute_approx(
     index: int,
     y: np.ndarray,
     method: str,
+    e: np.ndarray,
 ) -> float:
     """
     pos_p_hats: np.array, shape (n,), the predicted probabilities.
@@ -32,21 +69,25 @@ def compute_approx(
     index: int, the index of the data point whose influence we want to compute.
     y: np.array, shape (n,), the response variable.
     method: str, the method to use to compute the approximation ("1sN" or "IF").
+    e: np.ndarray, shape (p,), the direction of the influence function.
 
     Compute the influence function approximation of
     the effect of infinitesimally upweighting the index-th
-    data point on the logistic regression coefficient.
+    data point on a quantity of interest 
+    (e.g., some linear combination of the 
+    logistic regression coefficients,
+    determined by the choice of e).
     """
     v_lst = pos_p_hats * (1 - pos_p_hats)
     V = np.diag(v_lst)
     if method == "IF":
         influence_function = (
-            np.linalg.inv(X.T @ V @ X) * (y[index] - pos_p_hats[index]) * X[index][0]
-        )
-        return influence_function[0][0]
+            e @ np.linalg.inv(X.T @ V @ X) @ X[index] * (y[index] - pos_p_hats[index])
+        ) # solve linear system rather than inverting matrix.
+        return influence_function[0]
     elif method == "1sN":
         influence_function = (
-            np.linalg.inv(X.T @ V @ X) @ X[index] * (y[index] - pos_p_hats[index])
+            e @ np.linalg.inv(X.T @ V @ X) @ X[index] * (y[index] - pos_p_hats[index])
         )
         h_ii = compute_leverage(pos_p_hats, X, index, y)
         return 1 / (1 - h_ii) * influence_function[0]
@@ -168,43 +209,3 @@ def run_experiment_generate_dataframe(
         summary_list.append(summary_dict)
 
     return pd.DataFrame(summary_list)
-
-
-def plot_data(
-    X: np.ndarray,
-    y: np.ndarray,
-    model: LogisticRegression,
-    fit_range: int,
-    filename: str,
-    show_or_save: str,
-) -> float:
-    """
-    X: np.array, shape (n, p), the design matrix.
-    y: np.array, shape (n,), the response variable.
-    model: a logistic regression model.
-    fit_range: int, amount to extend the range of the fitted logistic regression
-    beyond the data range.
-    filename: str, the name of the file to save the plot to.
-    show_or_save: str, whether to show or save the plot. "show" or "save".
-
-    Create a scatter plot of the data with model fit overlayed.
-    """
-    # Create a range of values for plotting the decision boundary
-    X_range = np.linspace(min(X) - fit_range, max(X) + fit_range, 100).reshape(-1, 1)
-    y_prob = model.predict_proba(X_range)[:, 1]
-    # Plotting
-    plt.figure(figsize=(5, 2.5))
-    plt.scatter(X, y, c=y, alpha=0.5, label="Original Data")
-    plt.plot(X_range, y_prob, color="red", label="Logistic Regression Fit")
-    plt.xlabel("Feature")
-    plt.ylabel("Y")
-    plt.axhline(0.5, color="grey", linestyle="--", label="Decision Boundary (y=0.5)")
-    if show_or_save == "show":
-        plt.show()
-    else:
-        plt.savefig(filename, dpi=300)
-    plt.close()
-
-
-if __name__ == "__main__":
-    pass

@@ -89,3 +89,4 @@ outputs/
 .DS_Store
 *.bak
 *.tmp
+tests
