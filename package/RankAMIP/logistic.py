@@ -55,6 +55,86 @@ def run_logistic_regression(
     return model
 
 
+
+def make_influence_wrt_player(pos_p_hats: np.ndarray,
+                        X: np.ndarray,
+                        y: np.ndarray,
+                        method: str = "1sN") -> np.ndarray:
+    """
+    Compute the influence of each data point on the j-th regression coefficient.
+
+    Parameters
+    ----------
+    pos_p_hats : np.ndarray, shape (n,)
+        Predicted probabilities p_i from the fitted logistic model.
+    X : np.ndarray, shape (n, p)
+        Design matrix.
+    y : np.ndarray, shape (n,)
+        Binary responses (0/1).
+    method : {"IF", "1sN"}
+        - "IF":     influence function
+        - "1sN":    one-step Newton (scale by 1/(1−h_i))
+
+    Returns
+    -------
+    get_influence: callable function query in influence 
+            returns np.ndarray, shape (n,)
+            Influence scores of each point on coefficient `dim`.
+    """
+    n, p = X.shape
+    if method != "IF" and method != "1sN":
+        raise ValueError("method must be 'IF' or '1sN'")
+    
+
+    # 1) Hessian and its inverse
+    v = pos_p_hats * (1 - pos_p_hats)            # (n,)
+    H = X.T @ (v[:, None] * X)                  # (p, p)
+    # print("v[:, None]", v[:, None])
+    invH = np.linalg.inv(H)                     # (p, p)
+
+    # 2) residuals
+    resid = (y - pos_p_hats)                    # (n,)
+
+    # 3) unscaled influence on dim: r_i * (X_i @ invH[:, dim])
+    #    build p-vector direction once:
+
+
+    def get_influence(dim, cache = {}):
+        '''
+        query influence score at dim and updating cache
+        Arg:
+            dim: int between 0 and p
+            cache: a dict with key being the parameter index and value being a np.array of influence score
+        return:
+            influence scores and updated cache
+        '''
+
+        if not (0 <= dim < p):
+            raise IndexError(f"dim must be in [0, {p}), got {dim}")
+        if dim in cache:
+            return cache[dim], cache
+        
+        invH_col = invH[:, dim]                     # (p,)
+        #    then each row X_i dot d gives a length-n vector
+        influence_unscaled = resid * (X @ invH_col) # (n,)
+
+        if method == "IF":
+            cache[dim] = influence_unscaled
+            return influence_unscaled, cache
+
+        elif method == "1sN":
+            # compute leverages h_i
+            Hprod = X @ invH                         # (n, p)
+            h = v * np.einsum("ij,ij->i", Hprod, X)  # (n,)
+            res = influence_unscaled / (1.0 - h)
+            cache[dim] = res
+            return res, cache
+        
+    return get_influence
+
+
+
+
 def compute_approx(
     pos_p_hats: np.ndarray,
     X: np.ndarray,
