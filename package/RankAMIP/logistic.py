@@ -97,22 +97,22 @@ def make_influence_wrt_player(pos_p_hats: np.ndarray,
 
     # 3) unscaled influence on dim: r_i * (X_i @ invH[:, dim])
     #    build p-vector direction once:
+    cache = {}
 
-
-    def get_influence(dim, cache = {}):
+    def get_influence(dim):
         '''
         query influence score at dim and updating cache
         Arg:
             dim: int between 0 and p
             cache: a dict with key being the parameter index and value being a np.array of influence score
         return:
-            influence scores and updated cache
+            influence scores
         '''
 
         if not (0 <= dim < p):
             raise IndexError(f"dim must be in [0, {p}), got {dim}")
         if dim in cache:
-            return cache[dim], cache
+            return cache[dim]
         
         invH_col = invH[:, dim]                     # (p,)
         #    then each row X_i dot d gives a length-n vector
@@ -120,7 +120,7 @@ def make_influence_wrt_player(pos_p_hats: np.ndarray,
 
         if method == "IF":
             cache[dim] = influence_unscaled
-            return influence_unscaled, cache
+            return influence_unscaled
 
         elif method == "1sN":
             # compute leverages h_i
@@ -128,7 +128,7 @@ def make_influence_wrt_player(pos_p_hats: np.ndarray,
             h = v * np.einsum("ij,ij->i", Hprod, X)  # (n,)
             res = influence_unscaled / (1.0 - h)
             cache[dim] = res
-            return res, cache
+            return res
         
     return get_influence
 
