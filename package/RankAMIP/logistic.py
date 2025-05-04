@@ -59,7 +59,7 @@ def run_logistic_regression(
 def make_influence_wrt_player(pos_p_hats: np.ndarray,
                         X: np.ndarray,
                         y: np.ndarray,
-                        method: str = "1sN") -> np.ndarray:
+                        method: str = "1sN") -> callable:
     """
     Compute the influence of each data point on the j-th regression coefficient.
 
@@ -117,7 +117,7 @@ def make_influence_wrt_player(pos_p_hats: np.ndarray,
         invH_col = invH[:, dim]                     # (p,)
         #    then each row X_i dot d gives a length-n vector
         influence_unscaled = resid * (X @ invH_col) # (n,)
-
+        
         if method == "IF":
             cache[dim] = influence_unscaled
             return influence_unscaled
@@ -127,89 +127,98 @@ def make_influence_wrt_player(pos_p_hats: np.ndarray,
             Hprod = X @ invH                         # (n, p)
             h = v * np.einsum("ij,ij->i", Hprod, X)  # (n,)
             res = influence_unscaled / (1.0 - h)
+            #breakpoint()
             cache[dim] = res
             return res
         
     return get_influence
 
 
+def make_AMIP_sign_change_playerij(beta: np.array,
+                       alphaN: int,
+                       pos_p_hats: np.ndarray,
+                       X: np.ndarray,
+                       y: np.ndarray,
+                       method: str = "1sN", 
+                       refit: bool = False, 
+                       refit_config = {}
+                       ):
+    '''
+    make function that test if beta_i-beta_j is robust to data dripping
+    Args:
+        beta: the fitted beta
+        alphaN: the number to check robust to dropping 
+        pos_p_hats: predicted winning rate 
+        X: design 
+        y: original responses
+        method: what to use to approximate data dropping, has to be {1sN, IF}
+        refit: if we refit the model with identified MIS data dropped
+        refit_config: a dict with refitting parameters
+    return: 
+        amip_playerij: callable, taking index i and j return if beta_i-beta_j is robust, if j is None, return if beta_i can change sign
+            Arg: i and j, int
+            Return:
+                robust_or_not: whether the sign of beta_i-beta_j (or beta_i if j is None) is robust to dropping alphaN data, bool
+                amip_refit: amip approximation or refit, float
+                new_beta_diff_refit: actual refit, float
+
+    
+    '''
+    get_influence = make_influence_wrt_player(pos_p_hats, X, y, method)
+    def amip_playerij(dim_1, dim_2 = None):
+        if dim_2 is None: # this is useful when comparing to reference level 0
+            beta_i = beta[dim_1]
+            influence = -get_influence(dim_1)
+            top = np.argsort(influence)
+            if beta_i < 0:
+                top = top[::-1]
+            change = np.sum(influence[top[:alphaN]])
+            new_betai_amip = beta_i + change
+            change_sign_amip = np.sign(new_betai_amip) != np.sign(beta_i)
+            if refit:
+                res = run_logistic_regression(X[top[alphaN:,]], 
+                                              y[top[alphaN:]],
+                                              *refit_config)
+                new_betai_refit = res.coef_[0][dim_1]
+                change_sign_refit = np.sign(new_betai_refit) != np.sign(beta_i)
+            else:
+                new_betai_refit = None
+                change_sign_refit = None
+
+            #breakpoint()
+            return change_sign_amip, change_sign_refit, new_betai_amip, new_betai_refit, top[:alphaN]
+
+        beta_diff = beta[dim_1] - beta[dim_2]
+
+        influence = -(get_influence(dim_1) - get_influence(dim_2))
+        top = np.argsort(influence)
+        if beta_diff < 0: # if beta is negative, we want the positive part of the influence score
+            top = top[::-1]
+        #breakpoint()
+        change = np.sum(influence[top[:alphaN]])
+        new_beta_diff_amip = beta_diff + change
+        change_sign_amip = np.sign(new_beta_diff_amip) != np.sign(beta_diff)
+        
+
+        if refit:
+            res = run_logistic_regression(X[top[alphaN:,]], 
+                                              y[top[alphaN:]],
+                                              *refit_config)
+            new_beta_diff_refit = res.coef_[0][dim_1] - res.coef_[0][dim_2]
+            change_sign_refit = np.sign(new_beta_diff_refit) != np.sign(beta_diff)
+        else:
+            new_beta_diff_refit = None
+            change_sign_refit = None
+        return change_sign_amip, change_sign_refit, new_beta_diff_amip, new_beta_diff_refit, top[:alphaN]
+
+    return amip_playerij
+
+                
 
 
-def compute_approx(
-    pos_p_hats: np.ndarray,
-    X: np.ndarray,
-    index: int,
-    y: np.ndarray,
-    method: str,
-    e: np.ndarray,
-) -> float:
-    """
-    pos_p_hats: np.array, shape (n,), the predicted probabilities.
-    X: np.array, shape (n, p), the design matrix.
-    index: int, the index of the data point whose influence we want to compute.
-    y: np.array, shape (n,), the response variable.
-    method: str, the method to use to compute the approximation ("1sN" or "IF").
-    e: np.ndarray, shape (p,), the direction of the influence function.
-
-    Compute the influence function approximation of
-    the effect of infinitesimally upweighting the index-th
-    data point on a quantity of interest 
-    (e.g., some linear combination of the 
-    logistic regression coefficients,
-    determined by the choice of e).
-    """
-    v_lst = pos_p_hats * (1 - pos_p_hats)
-    V = np.diag(v_lst)
-    if method == "IF":
-        influence_function = (
-            e @ np.linalg.inv(X.T @ V @ X) @ X[index] * (y[index] - pos_p_hats[index])
-        ) # solve linear system rather than inverting matrix.
-        return influence_function[0]
-    elif method == "1sN":
-        influence_function = (
-            e @ np.linalg.inv(X.T @ V @ X) @ X[index] * (y[index] - pos_p_hats[index])
-        )
-        h_ii = compute_leverage(pos_p_hats, X, index, y)
-        return 1 / (1 - h_ii) * influence_function[0]
-    else:
-        return "Invalid method."
 
 
-def compute_approx_multiD(
-    pos_p_hats: np.ndarray,
-    X: np.ndarray,
-    index: int,
-    y: np.ndarray,
-    e: np.ndarray,
-    method: str,
-) -> float:
-    """
-    pos_p_hats: np.array, shape (n,), the predicted probabilities.
-    X: np.array, shape (n, p), the design matrix.
-    index: int, the index of the data point whose influence we want to compute.
-    y: np.array, shape (n,), the response variable.
-    e: np.array, shape (n,), the direction of interest (e.g. [1, 0, 0, 0, 0]).
-    method: str, the method to use to compute the approximation ("1sN" or "IF").
 
-    Compute the influence function approximation of
-    the effect of infinitesimally upweighting the index-th
-    data point on the logistic regression coefficient.
-    """
-    v_lst = pos_p_hats * (1 - pos_p_hats)
-    V = np.diag(v_lst)
-    if method == "IF":
-        influence_function = (
-            e @ np.linalg.inv(X.T @ V @ X) @ X[index] * (y[index] - pos_p_hats[index])
-        )
-        return influence_function
-    elif method == "1sN":
-        influence_function = (
-            e @ np.linalg.inv(X.T @ V @ X) @ X[index] * (y[index] - pos_p_hats[index])
-        )
-        h_ii = compute_leverage(pos_p_hats, X, index, y)
-        return 1 / (1 - h_ii) * influence_function
-    else:
-        return "Invalid method."
 
 
 def compute_leverage(
@@ -231,61 +240,3 @@ def compute_leverage(
     H = V @ X @ np.linalg.inv(X.T @ V @ X) @ X.T
     return H[index, index]
 
-
-def run_experiment_generate_dataframe(
-    X_orig: np.ndarray,
-    y_orig: np.ndarray,
-    X_position: np.ndarray,
-) -> pd.DataFrame:
-    """
-    X_orig: np.array, shape (n, p), the design matrix without the outlier.
-    y_orig: np.array, shape (n,), the response variable without the outlier.
-    X_position: np.array, shape (n, p), the array of x-positions of outliers.
-
-    returns: a dataframe that stores the summary statistics for the regression
-    run on the particular outlier.
-    """
-    summary_list = []
-    # run model without the outlier.
-    model_inliers = run_logistic_regression(X_orig, y_orig)
-
-    for i in range(len(X_position)):
-        # add d_n to the end of the data.
-        X_new = np.vstack((X_orig, X_position[i]))
-        y_new = np.append(y_orig, 0)
-
-        # fit a logistic regression model
-        model = run_logistic_regression(X_new, y_new)
-        # compute the predicted probabilities
-        pos_p_hats = model.predict_proba(X_new)[:, 1]
-        # plot the data
-        # plot_data(X_new, y_new, model, 20)
-
-        # print components of the leverage
-        leverage = compute_leverage(pos_p_hats, X_new, len(X_new) - 1, y_new)
-        if_func = compute_approx(pos_p_hats, X_new, len(X_new) - 1, y_new, "IF")
-        one_sN = compute_approx(pos_p_hats, X_new, len(X_new) - 1, y_new, "1sN")
-        delta = model.coef_[0][0] - model_inliers.coef_[0][0]
-
-        summary_dict = {
-            "X": X_position[i][0],
-            "IF": if_func,  # if approx to change in fit.
-            "1sN": one_sN,  # 1sN approx to change in fit.
-            "delta": delta,  # true change in fit
-            "new_fit": model.coef_[0][0],  # new fit
-            "orig_fit": model_inliers.coef_[0][0],  # original fit
-            "leverage": leverage,  # leverage of the outlier data point.
-            "residual": y_new[-1]
-            - pos_p_hats[-1],  # residual of the outlier data point.
-            "p_hat": pos_p_hats[-1],  # p_hat of the outlier data point.
-            "p_hat_one_minus_p_hat": pos_p_hats[-1] * (1 - pos_p_hats[-1]),
-            "X_2_p_hat_one_minus_p_hat_lst": (
-                X_new[-1] ** 2 * pos_p_hats[-1] * (1 - pos_p_hats[-1])
-            )[0],
-            "inv_xtvx": (
-                np.linalg.inv(X_new.T @ np.diag(pos_p_hats * (1 - pos_p_hats)) @ X_new)
-            )[0][0],
-        }
-        summary_list.append(summary_dict)
-
-    return pd.DataFrame(summary_list)
