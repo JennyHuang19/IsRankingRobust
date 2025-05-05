@@ -60,6 +60,8 @@ def isRankingRobust(k, alphaN, X, y):
     # run logistic regression on X, y
     myAMIP = LogisticAMIP(X, y, fit_intercept=False, penalty=None)
     player_scores = myAMIP.model.coef_[0] # (p,)
+    # append 0 to the end of player_scores, to account for the coefficient that was set to 0.
+    # player_scores = np.append(player_scores, 0)
 
     close_matchups = find_closest_matchups(player_scores, k)
     for playerA, playerB, diff in close_matchups: # a list of k(p-k) matchups.
@@ -83,7 +85,7 @@ class LogisticAMIP():
             penalty: bool whether to have penalty
             refit: bool, whether to refit when approximating dropping data
         '''
-        self.X = X
+        self.X = X # does X here exclude one of the players?
         self.y = y
         self.fit_intercept = fit_intercept
         self.penalty = penalty
