@@ -54,118 +54,103 @@ def run_logistic_regression(
     model.fit(X, y)
     return model
 
+class LogisticAMIP():
+    def __init__(self, X: np.ndarray, y: np.ndarray, 
+                 fit_intercept: bool = False, 
+                 penalty: str = None
+                 ):
+        '''
+        Class for dealing with AMIP in logistic regression
+        Args:
+            X: design matrix 
+            y: responses, binary
+            fit_intercept: bool, whether to fit intercept
+            penalty: bool whether to have penalty
+            refit: bool, whether to refit when approximating dropping data
+        '''
+        self.X = X
+        self.y = y
+        self.fit_intercept = fit_intercept
+        self.penalty = penalty
+        self.model = run_logistic_regression(X, y, fit_intercept, penalty)
+        self.pos_p_hats = self.model.predict_proba(X)[:, 1]
 
+        ### private stuff ###
+        self.__IFcache__ = {}
+        self.__oneSNcache__ = {}
+        self.__n__ = X.shape[0]
+        self.__p__ = X.shape[1]
+        self.__Hprod__ = self.X @ self.__invH__
 
-def make_influence_wrt_player(pos_p_hats: np.ndarray,
-                        X: np.ndarray,
-                        y: np.ndarray,
-                        method: str = "1sN") -> callable:
-    """
-    Compute the influence of each data point on the j-th regression coefficient.
-
-    Parameters
-    ----------
-    pos_p_hats : np.ndarray, shape (n,)
-        Predicted probabilities p_i from the fitted logistic model.
-    X : np.ndarray, shape (n, p)
-        Design matrix.
-    y : np.ndarray, shape (n,)
-        Binary responses (0/1).
-    method : {"IF", "1sN"}
-        - "IF":     influence function
-        - "1sN":    one-step Newton (scale by 1/(1−h_i))
-
-    Returns
-    -------
-    get_influence: callable function query in influence 
-            returns np.ndarray, shape (n,)
-            Influence scores of each point on coefficient `dim`.
-    """
-    n, p = X.shape
-    if method != "IF" and method != "1sN":
-        raise ValueError("method must be 'IF' or '1sN'")
+        self.__v__ = self.pos_p_hats * (1 - self.pos_p_hats)            # (n,)
+        H = X.T @ (self.v[:, None] * X)                  # (p, p)
+        self.__invH__ = np.linalg.inv(H)                     # (p, p)
+        self.__resid__ = (y - self.pos_p_hats)  
     
-
-    # 1) Hessian and its inverse
-    v = pos_p_hats * (1 - pos_p_hats)            # (n,)
-    H = X.T @ (v[:, None] * X)                  # (p, p)
-    # print("v[:, None]", v[:, None])
-    invH = np.linalg.inv(H)                     # (p, p)
-
-    # 2) residuals
-    resid = (y - pos_p_hats)                    # (n,)
-
-    # 3) unscaled influence on dim: r_i * (X_i @ invH[:, dim])
-    #    build p-vector direction once:
-    cache = {}
-
-    def get_influence(dim):
+    def get_influence_IF(self, dim):
         '''
-        query influence score at dim and updating cache
-        Arg:
-            dim: int between 0 and p
-            cache: a dict with key being the parameter index and value being a np.array of influence score
-        return:
-            influence scores
+        get influence approximation with influence function
+        Args:
+            dim: int the parameter to calculate influence approximation on
+        Return:
+            res: nd.array, influence approximation for all data points
         '''
-
-        if not (0 <= dim < p):
-            raise IndexError(f"dim must be in [0, {p}), got {dim}")
-        if dim in cache:
-            return cache[dim]
+        if not (0 <= dim < self.__p__):
+            raise IndexError(f"dim must be in [0, {self.__p__}), got {dim}")
+        if dim in self.__IFcache__:
+            return self.__IFcache__[dim]
         
-        invH_col = invH[:, dim]                     # (p,)
+        invH_col = self.__invH__[:, dim]                     # (p,)
         #    then each row X_i dot d gives a length-n vector
-        influence_unscaled = resid * (X @ invH_col) # (n,)
-        
-        if method == "IF":
-            cache[dim] = influence_unscaled
-            return influence_unscaled
-
-        elif method == "1sN":
-            # compute leverages h_i
-            Hprod = X @ invH                         # (n, p)
-            h = v * np.einsum("ij,ij->i", Hprod, X)  # (n,)
-            res = influence_unscaled / (1.0 - h)
-            #breakpoint()
-            cache[dim] = res
-            return res
-        
-    return get_influence
-
-
-def make_AMIP_sign_change_playerij(beta: np.array,
-                       alphaN: int,
-                       pos_p_hats: np.ndarray,
-                       X: np.ndarray,
-                       y: np.ndarray,
-                       method: str = "1sN", 
-                       refit: bool = False, 
-                       refit_config = {}
-                       ):
-    '''
-    make function that test if beta_i-beta_j is robust to data dripping
-    Args:
-        beta: the fitted beta
-        alphaN: the number to check robust to dropping 
-        pos_p_hats: predicted winning rate 
-        X: design 
-        y: original responses
-        method: what to use to approximate data dropping, has to be {1sN, IF}
-        refit: if we refit the model with identified MIS data dropped
-        refit_config: a dict with refitting parameters
-    return: 
-        amip_playerij: callable, taking index i and j return if beta_i-beta_j is robust, if j is None, return if beta_i can change sign
-            Arg: i and j, int
-            Return:
-                robust_or_not: whether the sign of beta_i-beta_j (or beta_i if j is None) is robust to dropping alphaN data, bool
-                amip_refit: amip approximation or refit, float
-                new_beta_diff_refit: actual refit, float
-
+        influence_unscaled = self.__resid__ * (self.X @ invH_col) # (n,)
+        self.__IFcache__[dim] = influence_unscaled
+        return influence_unscaled
     
-    '''
-    get_influence = make_influence_wrt_player(pos_p_hats, X, y, method)
-    def amip_playerij(dim_1, dim_2 = None):
+    def get_influence_1sN(self, dim):
+        '''
+        get influence approximation with 1 step Newton
+        Args:
+            dim: int the parameter to calculate influence approximation on
+        Return:
+            res: nd.array, influence approximation for all data points
+        '''
+        if not (0 <= dim < self.__p__):
+            raise IndexError(f"dim must be in [0, {self.__p__}), got {dim}")
+        if dim in self.__oneSNcache__:
+            return self.__oneSNcache__[dim]
+        invH_col = self.__invH__[:, dim]                     # (p,)
+        #    then each row X_i dot d gives a length-n vector
+        influence_unscaled = self.__resid__ * (self.X @ invH_col) # (n,)                         # (n, p)
+        h = self.__v__ * np.einsum("ij,ij->i", self.__Hprod__, self.X)  # (n,)
+        res = influence_unscaled / (1.0 - h)
+        #breakpoint()
+        self.__oneSNcache__[dim] = res
+        return res
+
+
+    def AMIP_sign_change(self, alphaN, dim_1, dim_2 = None, 
+                         method = "1sN", refit = True):
+        '''
+        AMIP to detect sign change of a parameter or difference between two parameters
+        Arg: alphaN: int amount of data willing to drop
+            dim_1, int, first parameter
+            dim_2, int, second parameter, if not None, approximate the different between dim_1 and dim_2
+
+        Return:
+            change_sign_amip: bool, if amip says there is a sign change
+            change_sign_refit: bool, if refit says there is a sign change
+            new_beta_diff_amip: predicted new beta, or beta differences by AMIP
+            new_beta_diff_refit: new beta or beta differences by refitting
+            index
+        '''
+        if method == "1sN":
+            get_influence = self.get_influence_1sN
+        elif method == "IF":
+            get_influence = self.get_influence_IF
+        else:
+            raise("method has to be 1sN or IF")
+        beta = self.model.coef_[0]
+    
         if dim_2 is None: # this is useful when comparing to reference level 0
             beta_i = beta[dim_1]
             influence = -get_influence(dim_1)
@@ -175,10 +160,12 @@ def make_AMIP_sign_change_playerij(beta: np.array,
             change = np.sum(influence[top[:alphaN]])
             new_betai_amip = beta_i + change
             change_sign_amip = np.sign(new_betai_amip) != np.sign(beta_i)
-            if refit:
-                res = run_logistic_regression(X[top[alphaN:,]], 
-                                              y[top[alphaN:]],
-                                              *refit_config)
+            if self.refit:
+                res = run_logistic_regression(self.X[top[alphaN:,]], 
+                                              self.y[top[alphaN:]],
+                                              fit_intercept=self.fit_intercept, 
+                                              penalty=self.penalty
+                                              )
                 new_betai_refit = res.coef_[0][dim_1]
                 change_sign_refit = np.sign(new_betai_refit) != np.sign(beta_i)
             else:
@@ -201,9 +188,10 @@ def make_AMIP_sign_change_playerij(beta: np.array,
         
 
         if refit:
-            res = run_logistic_regression(X[top[alphaN:,]], 
-                                              y[top[alphaN:]],
-                                              *refit_config)
+            res = run_logistic_regression(self.X[top[alphaN:,]], 
+                                          self.y[top[alphaN:]],
+                                          fit_intercept=self.fit_intercept, 
+                                          penalty=self.penalty)
             new_beta_diff_refit = res.coef_[0][dim_1] - res.coef_[0][dim_2]
             change_sign_refit = np.sign(new_beta_diff_refit) != np.sign(beta_diff)
         else:
@@ -211,13 +199,12 @@ def make_AMIP_sign_change_playerij(beta: np.array,
             change_sign_refit = None
         return change_sign_amip, change_sign_refit, new_beta_diff_amip, new_beta_diff_refit, top[:alphaN]
 
-    return amip_playerij
 
-                
+    def get_model(self):
+        return self.model
 
-
-
-
+    def get_pos_p_hats(self):
+        return self.pos_p_hats
 
 
 
