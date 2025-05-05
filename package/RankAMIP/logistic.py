@@ -9,7 +9,7 @@ from sklearn.linear_model import LogisticRegression
 
 def make_BT_design_matrix(
     df: pd.DataFrame
-) -> tuple[np.array, np.array, dict]:
+) -> "tuple[np.array, np.array, dict]":
     '''
     Given a preference dataset, make it a logistic regression
     Arg:
@@ -53,6 +53,57 @@ def run_logistic_regression(
     model = LogisticRegression(fit_intercept=fit_intercept, penalty=penalty)
     model.fit(X, y)
     return model
+
+def find_closest_matchups(scores: np.ndarray, K: int) -> 'list[tuple[int,int,float]]':
+    """
+    For each top-index t in [0..K-1] and each rest-index r in [K..P-1],
+    compute (t, r, scores[t] - scores[r]) and return as a list.
+    """
+    P = scores.shape[0]
+    top  = scores[:K]         # shape (K,)
+    rest = scores[K:]         # shape (P-K,)
+
+    # diffs[t, r-K] = scores[t] - scores[r]
+    diffs = top[:, None] - rest[None, :]  # shape (K, P-K)
+
+    # build flat index arrays of length K*(P-K)
+    t_idx = np.repeat(np.arange(K), P - K)  # [0,0,…,1,1,…,K-1, …]
+    r_idx = np.tile(np.arange(K, P), K)  # [K,K+1,…,K,K+1,…, …]
+
+    matchups = list(zip(
+        t_idx.tolist(),
+        r_idx.tolist(),
+        diffs.ravel().tolist()
+    ))
+    # sort the matchups by the difference.
+    sorted_matchups = sorted(matchups, key=lambda x: x[2])
+    
+    return sorted_matchups
+
+def isRankingRobust(k, alphaN, X, y):
+    '''
+    Check if the rank of the top k players/models is robust to data-dropping.
+    Arg: 
+        k, int, number of top players to consider. 
+        alphaN, int, amount of data willing to drop.
+        X, np.ndarray, design matrix.
+        y, np.ndarray, response vector.
+    Return:
+        playerA, playerB: int, indices of players/models.
+        new_beta_diff_refit: float, new beta difference.
+        indices: list, indices of dropped data.
+    '''
+    # run logistic regression on X, y
+    myAMIP = LogisticAMIP(X, y, fit_intercept=False, penalty=None)
+    player_scores = myAMIP.model.coef_[0] # (p,)
+
+    close_matchups = find_closest_matchups(player_scores, k)
+    for playerA, playerB, diff in close_matchups: # a list of k(p-k) matchups.
+        sign_change_amip, sign_change_refit, original_beta_diff,new_beta_diff_amip, new_beta_diff_refit, indices = myAMIP.AMIP_sign_change(alphaN, playerA, playerB)
+        if sign_change_refit:
+            return playerA, playerB, original_beta_diff, new_beta_diff_refit, indices
+    
+    return -1, -1, -1, -1, -1, [-1] # when ranking is robust.
 
 class LogisticAMIP():
     def __init__(self, X: np.ndarray, y: np.ndarray, 
@@ -198,7 +249,7 @@ class LogisticAMIP():
         else:
             new_beta_diff_refit = None
             change_sign_refit = None
-        return change_sign_amip, change_sign_refit, new_beta_diff_amip, new_beta_diff_refit, top[:alphaN]
+        return change_sign_amip, change_sign_refit, beta_diff, new_beta_diff_amip, new_beta_diff_refit, top[:alphaN]
 
 
     def get_model(self):
