@@ -1,44 +1,8 @@
 import numpy as np
 import pandas as pd
-
 from matplotlib import pyplot as plt
 from sklearn.linear_model import LogisticRegression
 
-
-
-
-def make_BT_design_matrix(
-    df: pd.DataFrame
-) -> "tuple[np.array, np.array, dict]":
-    '''
-    Given a preference dataset, make it a logistic regression
-    Arg:
-        df: a pd.dataframe with first column being first team, second column to be second team and third indicating whether first team wins
-    Return:
-        X: design matrix X
-        y: responses
-        player_to_id: encoder of teams, with the 0th team to have a score of 0
-    '''
-    all_players = pd.concat([df.iloc[:, 0], df.iloc[:, 1]])
-    all_players = pd.concat([df.iloc[:, 0], df.iloc[:, 1]])
-
-
-    unique_players = all_players.unique()
-
-    player_to_id = {player: idx for idx, player in enumerate(unique_players)}
-
-    n_players = len(player_to_id)
-    n_matches = df.shape[0]
-
-    encoded_player1 = df.iloc[:, 0].map(player_to_id)
-    encoded_player2 = df.iloc[:, 1].map(player_to_id)
-    matches = np.arange(n_matches)
-    X_tmp = np.zeros((n_matches, n_players))
-    X_tmp[matches, encoded_player1] = 1
-    X_tmp[matches, encoded_player2] = -1
-    X = X_tmp[:,1:]
-    y = np.array(df.iloc[:,2])
-    return X, y, player_to_id
 
 
 def run_logistic_regression(
@@ -103,7 +67,7 @@ def isRankingRobust(k, alphaN, X, y):
         if sign_change_refit:
             return playerA, playerB, original_beta_diff, new_beta_diff_refit, indices
     
-    return -1, -1, -1, -1, -1, [-1] # when ranking is robust.
+    return -1, -1, -1, -1, [-1] # when ranking is robust.
 
 class LogisticAMIP():
     def __init__(self, X: np.ndarray, y: np.ndarray, 

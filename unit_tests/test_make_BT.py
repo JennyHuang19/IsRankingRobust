@@ -1,4 +1,4 @@
-from RankAMIP.logistic import make_BT_design_matrix
+from package.RankAMIP.data_script import make_BT_design_matrix
 import numpy as np
 import pandas as pd
 
