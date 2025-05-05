@@ -1,7 +1,6 @@
 import numpy as np 
-from RankAMIP.logistic import make_influence_wrt_player
 from RankAMIP.logistic import run_logistic_regression
-from RankAMIP.logistic import make_AMIP_sign_change_playerij
+from RankAMIP.logistic import LogisticAMIP
  
 # Set seed for reproducibility
 np.random.seed(42)
@@ -56,17 +55,11 @@ y = (np.random.rand(n_games) <= probs) * 1.
 full_model = run_logistic_regression(X, y)
 full_model.coef_[0]
 pos_p_hats = full_model.predict_proba(X)[:, 1]
-
-influence_fun = make_influence_wrt_player(pos_p_hats, X, y, "IF")
-
-
-influence_first = influence_fun(0)
 betas = full_model.coef_[0]
 #breakpoint()
 
 #######
 
-amip_ij = make_AMIP_sign_change_playerij(betas, 10, pos_p_hats, X, y, "1sN", refit = True)
-change_sign_amip, change_sign_refit, new_beta_diff_amip, new_beta_diff_refit, idx = amip_ij(2, 0)
-
+myAMIP = LogisticAMIP(X, y, fit_intercept=False, penalty=None)
+print(myAMIP.AMIP_sign_change(40, 0, 1))
 #breakpoint()

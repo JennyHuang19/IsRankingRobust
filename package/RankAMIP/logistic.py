@@ -80,12 +80,13 @@ class LogisticAMIP():
         self.__oneSNcache__ = {}
         self.__n__ = X.shape[0]
         self.__p__ = X.shape[1]
-        self.__Hprod__ = self.X @ self.__invH__
+        
 
         self.__v__ = self.pos_p_hats * (1 - self.pos_p_hats)            # (n,)
-        H = X.T @ (self.v[:, None] * X)                  # (p, p)
+        H = X.T @ (self.__v__[:, None] * X)                  # (p, p)
         self.__invH__ = np.linalg.inv(H)                     # (p, p)
         self.__resid__ = (y - self.pos_p_hats)  
+        self.__Hprod__ = self.X @ self.__invH__
     
     def get_influence_IF(self, dim):
         '''
@@ -160,7 +161,7 @@ class LogisticAMIP():
             change = np.sum(influence[top[:alphaN]])
             new_betai_amip = beta_i + change
             change_sign_amip = np.sign(new_betai_amip) != np.sign(beta_i)
-            if self.refit:
+            if refit:
                 res = run_logistic_regression(self.X[top[alphaN:,]], 
                                               self.y[top[alphaN:]],
                                               fit_intercept=self.fit_intercept, 
