@@ -216,7 +216,7 @@ class LogisticAMIP():
                 change_sign_refit = None
 
             #breakpoint()
-            return change_sign_amip, change_sign_refit, new_betai_amip, new_betai_refit, top[:alphaN]
+            return change_sign_amip, change_sign_refit, beta_i, new_betai_amip, new_betai_refit, top[:alphaN]
 
         beta_diff = beta[dim_1] - beta[dim_2]
 
