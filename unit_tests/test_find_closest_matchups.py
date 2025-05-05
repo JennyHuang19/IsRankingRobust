@@ -1,43 +1,21 @@
 import numpy as np
 import pytest
+from RankAMIP.logistic import find_closest_matchups
 
-# from package.RankAMIP.logistic import find_closest_matchups
-def find_closest_matchups(scores: np.ndarray, K: int) -> 'list[tuple[int,int,float]]':
-    """
-    For each top-index t in [0..K-1] and each rest-index r in [K..P-1],
-    compute (t, r, scores[t] - scores[r]) and return as a list.
-    """
-    P = scores.shape[0]
-    top  = scores[:K]         # shape (K,)
-    rest = scores[K:]         # shape (P-K,)
 
-    # diffs[t, r-K] = scores[t] - scores[r]
-    diffs = top[:, None] - rest[None, :]  # shape (K, P-K)
-
-    # build flat index arrays of length K*(P-K)
-    t_idx = np.repeat(np.arange(K), P - K)  # [0,0,…,1,1,…,K-1, …]
-    r_idx = np.tile(np.arange(K, P), K)  # [K,K+1,…,K,K+1,…, …]
-
-    matchups = list(zip(
-        t_idx.tolist(),
-        r_idx.tolist(),
-        diffs.ravel().tolist()
-    ))
-    # sort the matchups by the difference.
-    sorted_matchups = sorted(matchups, key=lambda x: x[2])
-    
-    return sorted_matchups
 
 def test_single_pair():
     scores = np.array([10.0, 5.0])
     # Only one top (0) vs rest (1): diff = 10−5 = 5
     expected = [(0, 1, 5.0)]
+    breakpoint()
     assert find_closest_matchups(scores, K=1) == expected
 
 def test_simple_ordering():
-    scores = np.array([5.0, 3.0, 1.0])
+    scores = np.array([3.0, 5.0,  1.0])
     # Top (0) vs rest (1,2): diffs = [2.0, 4.0], sorted already
     expected = [(0, 1, 2.0), (0, 2, 4.0)]
+    breakpoint()
     assert find_closest_matchups(scores, K=1) == expected
 
 def test_multiple_top_indices():
@@ -71,3 +49,4 @@ def test_diff_type_and_correctness():
         assert isinstance(diff, float)
         # Check numeric correctness
         assert pytest.approx(diff) == scores[t] - scores[r]
+test_simple_ordering()

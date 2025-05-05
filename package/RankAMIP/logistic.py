@@ -18,31 +18,56 @@ def run_logistic_regression(
     model.fit(X, y)
     return model
 
-def find_closest_matchups(scores: np.ndarray, K: int) -> 'list[tuple[int,int,float]]':
+def find_closest_matchups(player_scores: np.ndarray, k: int) -> 'list[tuple[int,int,float]]':
     """
-    For each top-index t in [0..K-1] and each rest-index r in [K..P-1],
-    compute (t, r, scores[t] - scores[r]) and return as a list.
+    For each top-index t in [0..k-1] and each rest-index r in [k..P-1],
+    compute (t, r, player_scores[t] - player_scores[r]) and return as a list.
     """
-    P = scores.shape[0]
-    top  = scores[:K]         # shape (K,)
-    rest = scores[K:]         # shape (P-K,)
+    P = player_scores.shape[0] + 1
+    #breakpoint()
+    full_score = np.concatenate((np.array([0]), player_scores))
+    asort = np.argsort(full_score)[::-1] # big to small
+    
 
-    # diffs[t, r-K] = scores[t] - scores[r]
-    diffs = top[:, None] - rest[None, :]  # shape (K, P-K)
 
-    # build flat index arrays of length K*(P-K)
-    t_idx = np.repeat(np.arange(K), P - K)  # [0,0,…,1,1,…,K-1, …]
-    r_idx = np.tile(np.arange(K, P), K)  # [K,K+1,…,K,K+1,…, …]
+    #top  = full_score[asort[:k]]         # shape (k,)
+    #rest = full_score[asort[k:]]         # shape (P-k,)
+
+    
+
+    matchups = []
+
+    for i in range(k):
+        for j in range(P-k):
+            diff = np.abs(full_score[asort[i]]-full_score[asort[j+k]]).item()
+            tm1 = asort[i].item()-1
+            tm2 = asort[j+k].item()-1
+            if tm1 == -1:
+                matchups.append((tm2, None, diff))
+            elif tm2 == -1:
+                matchups.append((tm1, None, diff))
+            else:
+                matchups.append((tm1, tm2, diff))
+
+    '''
+    # diffs[t, r-k] = player_scores[t] - player_scores[r]
+    diffs = top[:, None] - rest[None, :]  # shape (k, P-k)
+
+    # build flat index arrays of length k*(P-k)
+    t_idx = np.repeat(np.arange(k), P - k)  # [0,0,…,1,1,…,k-1, …]
+    r_idx = np.tile(np.arange(k, P), k)  # [k,k+1,…,k,k+1,…, …]
 
     matchups = list(zip(
-        t_idx.tolist(),
-        r_idx.tolist(),
-        diffs.ravel().tolist()
+        (asort[t_idx]-1).tolist(),
+        (asort[r_idx]-1).tolist(),
+        np.abs(diffs).ravel().tolist()
     ))
     # sort the matchups by the difference.
+    '''
     sorted_matchups = sorted(matchups, key=lambda x: x[2])
-    
+    #breakpoint()
     return sorted_matchups
+
 
 def isRankingRobust(k, alphaN, X, y):
     '''
