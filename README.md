@@ -1,4 +1,4 @@
-# Auditing the Robustness of LLM Ranking Systems
+# Robustness of LLM Ranking Systems
 
 This repository contains code for our ICML 2025 submission:  
 **"Dropping Just a Handful of Preferences Can Change Top Large Language Model Rankings"**  
