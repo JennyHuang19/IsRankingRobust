@@ -26,17 +26,9 @@ def find_closest_matchups(player_scores: np.ndarray, k: int) -> 'list[tuple[int,
     P = player_scores.shape[0] + 1
     #breakpoint()
     full_score = np.concatenate((np.array([0]), player_scores))
-    asort = np.argsort(full_score)[::-1] # big to small
-    
-
-
-    #top  = full_score[asort[:k]]         # shape (k,)
-    #rest = full_score[asort[k:]]         # shape (P-k,)
-
-    
+    asort = np.argsort(full_score)[::-1] # players sorted from big to small
 
     matchups = []
-
     for i in range(k):
         for j in range(P-k):
             diff = np.abs(full_score[asort[i]]-full_score[asort[j+k]]).item()
@@ -49,21 +41,6 @@ def find_closest_matchups(player_scores: np.ndarray, k: int) -> 'list[tuple[int,
             else:
                 matchups.append((tm1, tm2, diff))
 
-    '''
-    # diffs[t, r-k] = player_scores[t] - player_scores[r]
-    diffs = top[:, None] - rest[None, :]  # shape (k, P-k)
-
-    # build flat index arrays of length k*(P-k)
-    t_idx = np.repeat(np.arange(k), P - k)  # [0,0,…,1,1,…,k-1, …]
-    r_idx = np.tile(np.arange(k, P), k)  # [k,k+1,…,k,k+1,…, …]
-
-    matchups = list(zip(
-        (asort[t_idx]-1).tolist(),
-        (asort[r_idx]-1).tolist(),
-        np.abs(diffs).ravel().tolist()
-    ))
-    # sort the matchups by the difference.
-    '''
     sorted_matchups = sorted(matchups, key=lambda x: x[2])
     #breakpoint()
     return sorted_matchups
@@ -71,7 +48,7 @@ def find_closest_matchups(player_scores: np.ndarray, k: int) -> 'list[tuple[int,
 
 def isRankingRobust(k, alphaN, X, y):
     '''
-    Check if the rank of the top k players/models is robust to data-dropping.
+    Checks if the ranking of the top k players/models is robust to data-dropping.
     Arg: 
         k, int, number of top players to consider. 
         alphaN, int, amount of data willing to drop.
@@ -85,12 +62,12 @@ def isRankingRobust(k, alphaN, X, y):
     # run logistic regression on X, y
     myAMIP = LogisticAMIP(X, y, fit_intercept=False, penalty=None)
     player_scores = myAMIP.model.coef_[0] # (p,)
-    # append 0 to the end of player_scores, to account for the coefficient that was set to 0.
-    # player_scores = np.append(player_scores, 0)
 
+    
     close_matchups = find_closest_matchups(player_scores, k)
     for playerA, playerB, diff in close_matchups: # a list of k(p-k) matchups.
-        sign_change_amip, sign_change_refit, original_beta_diff,new_beta_diff_amip, new_beta_diff_refit, indices = myAMIP.AMIP_sign_change(alphaN, playerA, playerB)
+        print("testing new matchup: ", playerA, playerB)
+        sign_change_amip, sign_change_refit, original_beta_diff, new_beta_diff_amip, new_beta_diff_refit, indices = myAMIP.AMIP_sign_change(alphaN, playerA, playerB)
         if sign_change_refit:
             return playerA, playerB, original_beta_diff, new_beta_diff_refit, indices
     
@@ -124,7 +101,7 @@ class LogisticAMIP():
         self.__p__ = X.shape[1]
         
 
-        self.__v__ = self.pos_p_hats * (1 - self.pos_p_hats)            # (n,)
+        self.__v__ = self.pos_p_hats * (1 - self.pos_p_hats) # (n,)
         H = X.T @ (self.__v__[:, None] * X)                  # (p, p)
         self.__invH__ = np.linalg.inv(H)                     # (p, p)
         self.__resid__ = (y - self.pos_p_hats)  
@@ -199,7 +176,7 @@ class LogisticAMIP():
             influence = -get_influence(dim_1)
             top = np.argsort(influence)
             if beta_i < 0:
-                top = top[::-1]
+                top = top[::-1] # if beta is negative, we want to sort influence score in reverse order.
             change = np.sum(influence[top[:alphaN]])
             new_betai_amip = beta_i + change
             change_sign_amip = np.sign(new_betai_amip) != np.sign(beta_i)

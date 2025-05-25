@@ -99,3 +99,20 @@ def simulate_bt_design_matrix(num_teams: int,
                 X[idx, i - 1] -= 1
     
     return X, y
+
+
+def break_ties_randomly(df, seed=6):
+    np.random.seed(seed)
+    tie_indices = df[df['winner_tie'] == 1].index
+    # Random choices: 1 means assign to model_a, 0 to model_b
+    assign_to_a = np.random.choice([0, 1], size=len(tie_indices))
+    
+    for idx, assign in zip(tie_indices, assign_to_a):
+        if assign == 1:
+            df.at[idx, 'winner_model_a'] = 1
+            df.at[idx, 'winner_model_b'] = 0
+        else:
+            df.at[idx, 'winner_model_a'] = 0
+            df.at[idx, 'winner_model_b'] = 1
+    
+    return df

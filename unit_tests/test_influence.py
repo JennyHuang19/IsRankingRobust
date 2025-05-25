@@ -1,6 +1,6 @@
 import numpy as np 
-from RankAMIP.logistic import run_logistic_regression
-from RankAMIP.logistic import LogisticAMIP
+from package.RankAMIP.logistic import run_logistic_regression
+from package.RankAMIP.logistic import LogisticAMIP
  
 # Set seed for reproducibility
 np.random.seed(42)
@@ -56,7 +56,7 @@ full_model = run_logistic_regression(X, y)
 full_model.coef_[0]
 pos_p_hats = full_model.predict_proba(X)[:, 1]
 betas = full_model.coef_[0]
-#breakpoint()
+breakpoint()
 
 #######
 

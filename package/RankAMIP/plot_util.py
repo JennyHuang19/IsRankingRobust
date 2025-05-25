@@ -4,6 +4,8 @@ from package.RankAMIP.logistic import run_logistic_regression
 
 from matplotlib import pyplot as plt
 from sklearn.linear_model import LogisticRegression
+import re
+
 
 def plot_data(
     X: np.ndarray,
@@ -77,7 +79,7 @@ def return_rankings_list(X, y, results, k, alphaN, player_to_id):
     return model_ranking_pre_post_drop
 
 
-def plot_bt_scores(X, y, rankings, alphaN, topk, filename_to_save):
+def plot_bt_scores(X, y, rankings, alphaN, topk, plot_title, filename_to_save):
     """
     Plots BT scores before and after data removal.
     
@@ -87,6 +89,7 @@ def plot_bt_scores(X, y, rankings, alphaN, topk, filename_to_save):
     rankings: list of tuples, (model_name, full_score, old_score, new_score)
     alphaN: int, number of dropped matches
     topk: int, number of top models to display
+    plot_title: str, title of the plot
     filename_to_save: str, path to save the figure
     """
     # Extract top-k entries
@@ -109,33 +112,87 @@ def plot_bt_scores(X, y, rankings, alphaN, topk, filename_to_save):
     plt.figure(figsize=(10, 9), dpi=250)
 
     # Scatter
-    plt.scatter(old_scores, y_plot - offset, label='BT Score Full Data', marker='o', color='blue', s=72)
-    plt.scatter(new_scores, y_plot + offset, 
-                label=f'BT Score After Dropping {alphaN} out of {num_matches_total}\n'
-                    f'({(alphaN/num_matches_total * 100):.3f}%) matches',
-                marker='s', color='orange', s=72)
+    plt.scatter(old_scores, y_plot, marker='o', color='blue', s=72) # label='BT Score Full Data',
+    # plt.scatter(new_scores, y_plot + offset, 
+    #             label=f'BT Score After Dropping {alphaN} out of {num_matches_total}\n matches ({(alphaN/num_matches_total * 100):.3f}%)',
+    #             marker='s', color='orange', s=72)
 
     # Extend x-axis limits slightly to the left and right
-    min_score = min(min(old_scores), min(new_scores))
-    max_score = max(max(old_scores), max(new_scores))
-    plt.xlim(min_score - 0.05, max_score + 0.1)
+    min_score = min(old_scores)
+    max_score = max(old_scores) # max(max(old_scores), max(new_scores))
+    plt.xlim(min_score - 0.05, max_score + 0.05)
 
     # Annotate scores next to points
     for i in range(len(y_plot)):
-        plt.text(old_scores[i] + 0.01, y_plot[i] - offset, f'{old_scores[i]:.3f}', 
-                va='center', ha='left', fontsize=14, fontfamily='monospace', color='blue')
-        plt.text(new_scores[i] + 0.01, y_plot[i] + offset, f'{new_scores[i]:.3f}', 
-                va='center', ha='left', fontsize=14, fontfamily='monospace', color='darkorange')
+        if i > len(y_plot) - 3:
+            # Position the text to the left of the point
+            plt.text(old_scores[i] - 0.03, y_plot[i], f'{old_scores[i]:.3f}', 
+                    va='center', ha='right', fontsize=14, fontfamily='monospace', color='blue')
+        else:
+            # Position the text to the right of the point
+            plt.text(old_scores[i] + 0.03, y_plot[i], f'{old_scores[i]:.3f}', 
+                    va='center', ha='left', fontsize=14, fontfamily='monospace', color='blue')
 
     # Axis
-    plt.xlabel('Bradley-Terry Score', fontsize=16, fontfamily='monospace')
-    plt.yticks(y_plot, model_names, fontsize=14, fontfamily='monospace')
-    plt.xticks(fontsize=14, fontfamily='monospace')
-    plt.title('Model Rankings in Chatbot Arena', fontsize=18, fontfamily='monospace')
-    plt.legend(fontsize=12)
+    plt.xlabel('Bradley-Terry Score', fontsize=22, fontfamily='monospace')
+    plt.yticks(y_plot, model_names, fontsize=18, fontfamily='monospace')
+    plt.xticks(fontsize=18, fontfamily='monospace')
+    # plt.title(plot_title, fontsize=22, fontfamily='monospace')
+    # plt.legend(fontsize=12)
     plt.grid(True, linestyle='--', alpha=0.4)
     plt.tight_layout()
 
     # Save
     plt.savefig(filename_to_save, bbox_inches='tight')
     plt.close()
+
+
+def add_match_proportions(llm_arena_results: pd.DataFrame, LLMArena_noTies: pd.DataFrame) -> pd.DataFrame:
+    """For each row in llm_arena_results, computes the proportion of subset matchups that:
+    - involve both playerA and playerB
+    - involve only one of them
+    - involve neither
+    
+    Returns the same DataFrame with new columns: 'prop_both', 'prop_one', 'prop_neither'
+    """
+    prop_both_list = []
+    prop_one_list = []
+    prop_neither_list = []
+
+    for _, row in llm_arena_results.iterrows():
+        # Extract and parse indices
+        indices_str = row['indices']
+        indices = list(map(int, re.findall(r'\d+', str(indices_str))))
+
+        playerA = row['playerA_Name']
+        playerB = row['playerB_Name']
+
+        # Subset the relevant match rows
+        subset = LLMArena_noTies.loc[indices]
+
+        involve_A = (subset['model_a'] == playerA) | (subset['model_b'] == playerA)
+        involve_B = (subset['model_a'] == playerB) | (subset['model_b'] == playerB)
+
+        involve_both = involve_A & involve_B
+        involve_one = involve_A ^ involve_B  # XOR
+        involve_neither = ~(involve_A | involve_B)
+
+        total = len(subset)
+
+        if total > 0:
+            prop_both = involve_both.sum() / total
+            prop_one = involve_one.sum() / total
+            prop_neither = involve_neither.sum() / total
+        else:
+            prop_both = prop_one = prop_neither = float('nan')
+
+        prop_both_list.append(prop_both)
+        prop_one_list.append(prop_one)
+        prop_neither_list.append(prop_neither)
+
+    # Add new columns
+    llm_arena_results['prop_both'] = prop_both_list
+    llm_arena_results['prop_one'] = prop_one_list
+    llm_arena_results['prop_neither'] = prop_neither_list
+
+    return llm_arena_results
