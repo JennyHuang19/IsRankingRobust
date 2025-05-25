@@ -4,6 +4,6 @@ from setuptools import setup
 setup(name='RankAMIP',
       version='0.0.1',
       description='Robustness of ranking via AMIP',
-      author='Jenny Y. Huang and Yunyi Shen',
+      author='',
       packages=[],
      )
