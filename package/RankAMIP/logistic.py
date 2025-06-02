@@ -66,7 +66,7 @@ def isRankingRobust(k, alphaN, X, y):
     
     close_matchups = find_closest_matchups(player_scores, k)
     for playerA, playerB, diff in close_matchups: # a list of k(p-k) matchups.
-        print("testing new matchup: ", playerA, playerB)
+        # print("testing new matchup: ", playerA, playerB)
         sign_change_amip, sign_change_refit, original_beta_diff, new_beta_diff_amip, new_beta_diff_refit, indices = myAMIP.AMIP_sign_change(alphaN, playerA, playerB)
         if sign_change_refit:
             return playerA, playerB, original_beta_diff, new_beta_diff_refit, indices
@@ -87,7 +87,7 @@ class LogisticAMIP():
             penalty: bool whether to have penalty
             refit: bool, whether to refit when approximating dropping data
         '''
-        self.X = X # does X here exclude one of the players?
+        self.X = X
         self.y = y
         self.fit_intercept = fit_intercept
         self.penalty = penalty
@@ -148,75 +148,116 @@ class LogisticAMIP():
         return res
 
 
-    def AMIP_sign_change(self, alphaN, dim_1, dim_2 = None, 
-                         method = "1sN", refit = True):
-        '''
-        AMIP to detect sign change of a parameter or difference between two parameters
-        Arg: alphaN: int amount of data willing to drop
-            dim_1, int, first parameter
-            dim_2, int, second parameter, if not None, approximate the different between dim_1 and dim_2
 
-        Return:
-            change_sign_amip: bool, if amip says there is a sign change
-            change_sign_refit: bool, if refit says there is a sign change
-            new_beta_diff_amip: predicted new beta, or beta differences by AMIP
-            new_beta_diff_refit: new beta or beta differences by refitting
-            index
+    def AMIP_sign_change(self, alphaN, dim_1, dim_2=None, 
+                     method="1sN", refit=True, contains_ties=True,
+                     SCALE=400, INIT_RATING=1000):
+        '''
+        This function uses AMIP to detect the sign change of a parameter or difference between two parameters, using ELO-scaled coefficients
+
+        Args:
+            alphaN: int, number of points to drop
+            dim_1: int, first parameter index
+            dim_2: int or None, second parameter index
+            method: str, "1sN" or "IF"
+            refit: bool, whether to refit
+            contains_ties: bool, whether to handle row duplication
+            SCALE: float, scaling multiplier for ELO
+            INIT_RATING: float, ELO intercept shift
+
+        Returns:
+            change_sign_amip: bool
+            change_sign_refit: bool
+            beta_diff: float
+            new_beta_amip: float
+            new_beta_refit: float or None
+            index: np.ndarray of dropped indices
         '''
         if method == "1sN":
             get_influence = self.get_influence_1sN
         elif method == "IF":
             get_influence = self.get_influence_IF
         else:
-            raise("method has to be 1sN or IF")
-        beta = self.model.coef_[0]
+            raise ValueError("method has to be '1sN' or 'IF'")
     
-        if dim_2 is None: # this is useful when comparing to reference level 0
-            beta_i = beta[dim_1]
-            influence = -get_influence(dim_1)
+
+        if contains_ties:
+            nonWeightedX = self.X[::2]
+            nonWeightedY = self.y[::2]
+            res_full = run_logistic_regression(
+                nonWeightedX, nonWeightedY,
+                fit_intercept=self.fit_intercept,
+                penalty=self.penalty
+            )
+            beta = res_full.coef_[0]
+        else:
+            beta = self.model.coef_[0]
+
+        if dim_2 is None:
+            beta_i = SCALE * beta[dim_1] + INIT_RATING
+            influence = -SCALE * get_influence(dim_1)
+
+            if contains_ties:
+                if len(influence) % 2 != 0:
+                    raise ValueError("Expected even length influence for duplicated rows")
+                influence = influence.reshape(-1, 2).sum(axis=1)
+
             top = np.argsort(influence)
-            if beta_i < 0:
-                top = top[::-1] # if beta is negative, we want to sort influence score in reverse order.
+            if beta_i < INIT_RATING:
+                top = top[::-1]
+
             change = np.sum(influence[top[:alphaN]])
             new_betai_amip = beta_i + change
-            change_sign_amip = np.sign(new_betai_amip) != np.sign(beta_i)
+            change_sign_amip = np.sign(new_betai_amip - INIT_RATING) != np.sign(beta_i - INIT_RATING)
+
             if refit:
-                res = run_logistic_regression(self.X[top[alphaN:,]], 
-                                              self.y[top[alphaN:]],
-                                              fit_intercept=self.fit_intercept, 
-                                              penalty=self.penalty
-                                              )
-                new_betai_refit = res.coef_[0][dim_1]
-                change_sign_refit = np.sign(new_betai_refit) != np.sign(beta_i)
+                res = run_logistic_regression(
+                    nonWeightedX[top[alphaN:],], nonWeightedY[top[alphaN:]],
+                    fit_intercept=self.fit_intercept,
+                    penalty=self.penalty
+                )
+                new_betai_refit = SCALE * res.coef_[0][dim_1] + INIT_RATING
+                change_sign_refit = np.sign(new_betai_refit - INIT_RATING) != np.sign(beta_i - INIT_RATING)
             else:
                 new_betai_refit = None
                 change_sign_refit = None
 
-            #breakpoint()
             return change_sign_amip, change_sign_refit, beta_i, new_betai_amip, new_betai_refit, top[:alphaN]
 
-        beta_diff = beta[dim_1] - beta[dim_2]
+        # Case where comparing two coefficients
+        beta_diff = SCALE * (beta[dim_1] - beta[dim_2])
+        influence_dim1 = get_influence(dim_1)
+        influence_dim2 = get_influence(dim_2)
 
-        influence = -(get_influence(dim_1) - get_influence(dim_2))
+        if contains_ties:
+            if len(influence_dim1) % 2 != 0 or len(influence_dim2) % 2 != 0:
+                raise ValueError("Expected even length influences for duplicated rows")
+            influence_dim1 = influence_dim1.reshape(-1, 2).sum(axis=1)
+            influence_dim2 = influence_dim2.reshape(-1, 2).sum(axis=1)
+
+        influence = -SCALE * (influence_dim1 - influence_dim2)
         top = np.argsort(influence)
-        if beta_diff < 0: # if beta is negative, we want the positive part of the influence score
+        if beta_diff < 0:
             top = top[::-1]
-        #breakpoint()
+
         change = np.sum(influence[top[:alphaN]])
         new_beta_diff_amip = beta_diff + change
         change_sign_amip = np.sign(new_beta_diff_amip) != np.sign(beta_diff)
-        
 
         if refit:
-            res = run_logistic_regression(self.X[top[alphaN:,]], 
-                                          self.y[top[alphaN:]],
-                                          fit_intercept=self.fit_intercept, 
-                                          penalty=self.penalty)
-            new_beta_diff_refit = res.coef_[0][dim_1] - res.coef_[0][dim_2]
+            res = run_logistic_regression(
+                nonWeightedX[top[alphaN:],], nonWeightedY[top[alphaN:]],
+                fit_intercept=self.fit_intercept,
+                penalty=self.penalty
+            )
+            new_beta_diff_refit = SCALE * (
+                res.coef_[0][dim_1] - res.coef_[0][dim_2]
+            )
             change_sign_refit = np.sign(new_beta_diff_refit) != np.sign(beta_diff)
         else:
             new_beta_diff_refit = None
             change_sign_refit = None
+
         return change_sign_amip, change_sign_refit, beta_diff, new_beta_diff_amip, new_beta_diff_refit, top[:alphaN]
 
 
