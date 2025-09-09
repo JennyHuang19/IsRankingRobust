@@ -122,6 +122,10 @@ class LogisticAMIP():
         if not (0 <= dim < self.__p__):
             raise IndexError(f"dim must be in [0, {self.__p__}), got {dim}")
         if dim in self.__IFcache__:
+            if self.weighted:
+                influence_unscaled = self.__IFcache__[dim]
+                actual_n = influence_unscaled.shape[0]//2
+                return influence_unscaled[:actual_n] + influence_unscaled[actual_n:] 
             return self.__IFcache__[dim]
         
         invH_col = self.__invH__[:, dim]                     # (p,)
@@ -131,6 +135,7 @@ class LogisticAMIP():
         
         if self.weighted:
             actual_n = influence_unscaled.shape[0]//2
+            #breakpoint()
             return influence_unscaled[:actual_n] + influence_unscaled[actual_n:] # return sum of two duplicates
         return influence_unscaled
     
@@ -145,6 +150,10 @@ class LogisticAMIP():
         if not (0 <= dim < self.__p__):
             raise IndexError(f"dim must be in [0, {self.__p__}), got {dim}")
         if dim in self.__oneSNcache__:
+            if self.weighted:
+                res = self.__oneSNcache__[dim]
+                actual_n = res.shape[0]//2
+                return res[:actual_n] + res[actual_n:]
             return self.__oneSNcache__[dim]
         invH_col = self.__invH__[:, dim]                     # (p,)
         #    then each row X_i dot d gives a length-n vector
@@ -155,7 +164,7 @@ class LogisticAMIP():
         self.__oneSNcache__[dim] = res
         
         if self.weighted:
-            actual_n = res.shape[0]
+            actual_n = res.shape[0]//2
             return res[:actual_n] + res[actual_n:]
         
         return res
@@ -217,7 +226,7 @@ class LogisticAMIP():
             return change_sign_amip, change_sign_refit, beta_i, new_betai_amip, new_betai_refit, top[:alphaN]
 
         beta_diff = beta[dim_1] - beta[dim_2]
-
+        #breakpoint()
         influence = -(get_influence(dim_1) - get_influence(dim_2)) # negate the influence score to get the impact of dropping a data point.
         top = np.argsort(influence) # here, we select the alpha N most negative influence scores; dropping these will flip the sign to negative. 
         if beta_diff < 0: # if beta is negative, we want the positive part of the influence score
@@ -229,10 +238,19 @@ class LogisticAMIP():
         
 
         if refit:
-            res = run_logistic_regression(self.X[top[alphaN:,]], 
-                                          self.y[top[alphaN:]],
-                                          fit_intercept=self.fit_intercept, 
-                                          penalty=self.penalty)
+            if self.weighted:
+                actual_n = self.X.shape[0]//2
+                res = run_logistic_regression(self.X[np.concatenate((top[alphaN:,], actual_n + top[alphaN:,]))], 
+                                              self.y[np.concatenate((top[alphaN:,], actual_n + top[alphaN:,]))],
+                                              fit_intercept=self.fit_intercept, 
+                                              penalty=self.penalty
+                                              )
+            else:
+                res = run_logistic_regression(self.X[top[alphaN:,]], 
+                                              self.y[top[alphaN:]],
+                                              fit_intercept=self.fit_intercept, 
+                                              penalty=self.penalty
+                                              )
             new_beta_diff_refit = res.coef_[0][dim_1] - res.coef_[0][dim_2]
             change_sign_refit = np.sign(new_beta_diff_refit) != np.sign(beta_diff)
         else:

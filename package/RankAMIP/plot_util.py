@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from package.RankAMIP.logistic import run_logistic_regression
+from .logistic import run_logistic_regression
 
 from matplotlib import pyplot as plt
 from sklearn.linear_model import LogisticRegression
