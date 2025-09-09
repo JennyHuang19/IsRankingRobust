@@ -68,7 +68,7 @@ def isRankingRobust(k, alphaN, X, y, method = "IF", weighted = False):
     close_matchups = find_closest_matchups(player_scores, k)
     for playerA, playerB, diff in close_matchups: # a list of k(p-k) matchups.
         # print("testing new matchup: ", playerA, playerB)
-        sign_change_amip, sign_change_refit, original_beta_diff, new_beta_diff_amip, new_beta_diff_refit, indices = myAMIP.AMIP_sign_change(alphaN, playerA, playerB, method, weighted)
+        sign_change_amip, sign_change_refit, original_beta_diff, new_beta_diff_amip, new_beta_diff_refit, indices = myAMIP.AMIP_sign_change(alphaN, playerA, playerB, method)
         if sign_change_refit:
             return playerA, playerB, original_beta_diff, new_beta_diff_refit, indices
     
