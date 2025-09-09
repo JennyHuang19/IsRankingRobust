@@ -46,7 +46,7 @@ def find_closest_matchups(player_scores: np.ndarray, k: int) -> 'list[tuple[int,
     return sorted_matchups
 
 
-def isRankingRobust(k, alphaN, X, y, method = "IF"):
+def isRankingRobust(k, alphaN, X, y, method = "IF", weighted = False):
     '''
     Checks if the ranking of the top k players/models is robust to data-dropping.
     Arg: 
@@ -61,14 +61,14 @@ def isRankingRobust(k, alphaN, X, y, method = "IF"):
         indices: list, indices of dropped data.
     '''
     # run logistic regression on X, y
-    myAMIP = LogisticAMIP(X, y, fit_intercept=False, penalty=None)
+    myAMIP = LogisticAMIP(X, y, fit_intercept=False, penalty=None, weighted = weighted)
     player_scores = myAMIP.model.coef_[0] # (p,)
 
     
     close_matchups = find_closest_matchups(player_scores, k)
     for playerA, playerB, diff in close_matchups: # a list of k(p-k) matchups.
         # print("testing new matchup: ", playerA, playerB)
-        sign_change_amip, sign_change_refit, original_beta_diff, new_beta_diff_amip, new_beta_diff_refit, indices = myAMIP.AMIP_sign_change(alphaN, playerA, playerB, method)
+        sign_change_amip, sign_change_refit, original_beta_diff, new_beta_diff_amip, new_beta_diff_refit, indices = myAMIP.AMIP_sign_change(alphaN, playerA, playerB, method, weighted)
         if sign_change_refit:
             return playerA, playerB, original_beta_diff, new_beta_diff_refit, indices
     
@@ -77,7 +77,8 @@ def isRankingRobust(k, alphaN, X, y, method = "IF"):
 class LogisticAMIP():
     def __init__(self, X: np.ndarray, y: np.ndarray, 
                  fit_intercept: bool = False, 
-                 penalty: str = None
+                 penalty: str = None,
+                 weighted: bool = False
                  ):
         '''
         Class for dealing with AMIP in logistic regression
@@ -87,6 +88,7 @@ class LogisticAMIP():
             fit_intercept: bool, whether to fit intercept
             penalty: bool whether to have penalty
             refit: bool, whether to refit when approximating dropping data
+            weighted: bool, whether this X and y are from weighted BT as in chatbot arena
         '''
         self.X = X
         self.y = y
@@ -94,6 +96,7 @@ class LogisticAMIP():
         self.penalty = penalty
         self.model = run_logistic_regression(X, y, fit_intercept, penalty)
         self.pos_p_hats = self.model.predict_proba(X)[:, 1]
+        self.weighted = weighted
 
         ### private stuff ###
         self.__IFcache__ = {}
@@ -125,6 +128,10 @@ class LogisticAMIP():
         #    then each row X_i dot d gives a length-n vector
         influence_unscaled = self.__resid__ * (self.X @ invH_col) # (n,)
         self.__IFcache__[dim] = influence_unscaled
+        
+        if self.weighted:
+            actual_n = influence_unscaled.shape[0]//2
+            return influence_unscaled[:actual_n] + influence_unscaled[actual_n:] # return sum of two duplicates
         return influence_unscaled
     
     def get_influence_1sN(self, dim):
@@ -146,6 +153,11 @@ class LogisticAMIP():
         res = influence_unscaled / (1.0 - h)
         #breakpoint()
         self.__oneSNcache__[dim] = res
+        
+        if self.weighted:
+            actual_n = res.shape[0]
+            return res[:actual_n] + res[actual_n:]
+        
         return res
 
 
@@ -182,7 +194,15 @@ class LogisticAMIP():
             new_betai_amip = beta_i + change
             change_sign_amip = np.sign(new_betai_amip) != np.sign(beta_i)
             if refit:
-                res = run_logistic_regression(self.X[top[alphaN:,]], 
+                if self.weighted:
+                    actual_n = self.X.shape[0]//2
+                    res = run_logistic_regression(self.X[np.concatenate((top[alphaN:,], actual_n + top[alphaN:,]))], 
+                                              self.y[np.concatenate((top[alphaN:,], actual_n + top[alphaN:,]))],
+                                              fit_intercept=self.fit_intercept, 
+                                              penalty=self.penalty
+                                              )
+                else:
+                    res = run_logistic_regression(self.X[top[alphaN:,]], 
                                               self.y[top[alphaN:]],
                                               fit_intercept=self.fit_intercept, 
                                               penalty=self.penalty
