@@ -2,17 +2,21 @@ import numpy as np
 import pandas as pd
 
 def make_BT_design_matrix(
-    df: pd.DataFrame
+    df: pd.DataFrame,
+    weight_tie: bool = False # do we do the duplication for tie 
 ) -> "tuple[np.array, np.array, dict]":
     '''
     Given a preference dataset, make it a logistic regression
     Arg:
         df: a pd.dataframe with first column being first team, second column to be second team and third indicating whether first team wins
+        weight_tie: if we do duplication of tie, if True require df to have the fourth column of whether it is a tie
     Return:
         X: design matrix X
         y: responses
         player_to_id: encoder of teams, with the 0th team to have a score of 0
     '''
+    if weight_tie:
+        assert df.shape[1] == 4, "require fourth column of tie indicator"
     all_players = pd.concat([df.iloc[:, 0], df.iloc[:, 1]])
     all_players = pd.concat([df.iloc[:, 0], df.iloc[:, 1]])
 
@@ -32,6 +36,12 @@ def make_BT_design_matrix(
     X_tmp[matches, encoded_player2] = -1
     X = X_tmp[:,1:]
     y = np.array(df.iloc[:,2])
+    
+    if weight_tie:
+        X = np.concatenate((X, X)) # duplicate 
+        y = np.concatenate((y, y + np.array(df.iloc[:, 3]))) # this works since if it is a tie, y has to be 0 originally (counted as loss), but df[:, 3] would be 1, and adding would count it as a win now, if it is not a tie, df[:,3] is simply 0 things are kept as is.
+    
+    
     return X, y, player_to_id
 
 def simulate_bt_design_matrix(num_teams: int,
