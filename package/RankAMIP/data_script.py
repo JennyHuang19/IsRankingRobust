@@ -3,13 +3,13 @@ import pandas as pd
 
 def make_BT_design_matrix(
     df: pd.DataFrame,
-    weight_tie: bool = False # whether we do the duplication for tie 
+    weight_tie: bool = False # do we do the duplication for tie 
 ) -> "tuple[np.array, np.array, dict]":
     '''
     Given a preference dataset, make it a logistic regression
     Arg:
         df: a pd.dataframe with first column being first team, second column to be second team and third indicating whether first team wins
-        weight_tie: whether we do duplication of ties, if True require df to have the fourth column of whether it is a tie
+        weight_tie: if we do duplication of tie, if True require df to have the fourth column of whether it is a tie
     Return:
         X: design matrix X
         y: responses
