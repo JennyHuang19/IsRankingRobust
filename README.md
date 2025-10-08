@@ -15,4 +15,5 @@ We introduce a fast method for checking whether the rankings of top-performing l
 ### What’s Inside
 
 - **`package/`** — Core implementation of the robustness-check algorithm.  
-- **`notebooks/`** — Interactive scripts reproducing sensitivity analyses on Chatbot Arena, Webdev Arena, Vision Arena, Search Arena, and MT Bench.
+- **`notebooks/`** — Interactive scripts for reproducing sensitivity analyses on Chatbot Arena, Webdev Arena, Vision Arena, Search Arena, and MT Bench.
+- **`results/`** - data files generated from running the algorithm across different arenas. Each file includes the dropped prompts/answers and the number of points that needed to be removed to alter the rankings in that arena.
