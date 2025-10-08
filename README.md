@@ -8,7 +8,7 @@ This repository accompanies our ICML 2025 paper, presented as an Oral at the 2nd
 LLM leaderboards, such as Chatbot Arena, rank models based on thousands of human or AI preference comparisons. But how stable are these rankings really?
 
 We show that removing as little as 0.003% of preference data can flip the top of the leaderboard.
-To investigate this phenomenon, we introduce a fast approximation method that efficiently identifies the most influential preferences in Bradley–Terry–based ranking systems.
+To investigate this phenomenon, we introduce a fast approximation method that efficiently identifies the most influential preferences in LLM ranking systems.
 
 We introduce a fast method for checking whether the rankings of top-performing LLMs are stable to the removal of a small number of preference evaluations, focusing on Bradley–-Terry based systems, like Chatbot Arena.
 
