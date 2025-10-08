@@ -16,4 +16,4 @@ Our method also efficiently identifies the most influential prompt/response pair
 
 - **`package/`** — Core implementation of the robustness-check algorithm.  
 - **`notebooks/`** — Interactive scripts for reproducing sensitivity analyses on Chatbot Arena, Webdev Arena, Vision Arena, Search Arena, and MT Bench.
-- **`results/`** - Data files generated from running robustness checks on each arena. Each file includes the dropped prompts/answers and the number of points that needed to be removed to alter the rankings in that arena.
+- **`results/`** — Data files generated from running robustness checks on each arena. Each file includes the dropped prompts/answers and the number of points that needed to be removed to alter the rankings in that arena.
