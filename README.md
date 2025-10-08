@@ -14,5 +14,5 @@ We introduce a fast method for checking whether the rankings of top-performing l
 
 ### What’s Inside
 
-- **`src/`** — Core implementation of the robustness-check algorithm.  
-- **`notebooks/`** — Interactive Scripts reproducing sensitivity analyses on Chatbot Arena, Webdev Arena, Vision Arena, Search Arena, and MT Bench.
+- **`package/`** — Core implementation of the robustness-check algorithm.  
+- **`notebooks/`** — Interactive scripts reproducing sensitivity analyses on Chatbot Arena, Webdev Arena, Vision Arena, Search Arena, and MT Bench.
