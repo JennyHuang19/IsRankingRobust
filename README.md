@@ -10,7 +10,7 @@ LLM leaderboards, such as Chatbot Arena, rank models based on thousands of human
 We show that removing as little as 0.003% of preference data can flip the top of the leaderboard.
 To investigate this phenomenon, we introduce a fast approximation method that efficiently identifies the most influential preferences in Bradley–Terry (BT)–based ranking systems.
 
-We introduce a fast method for checking whether the rankings of top-performing LLMs are stable to the removal of a small number of preference evaluations, focusing on Bradley–-Terry (BT) based systems, like Chatbot Arena.
+We introduce a fast method for checking whether the rankings of top-performing LLMs are stable to the removal of a small number of preference evaluations, focusing on Bradley–-Terry based systems, like Chatbot Arena.
 
 ### What’s Inside
 
