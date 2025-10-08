@@ -5,7 +5,7 @@ This repository accompanies our ICML 2025 paper, presented as an Oral at the 2nd
 
 ### Overview
 
-Large Language Model leaderboards, such as Chatbot Arena, rank models based on thousands of human or AI preference comparisons. But how stable are these rankings really?
+LLM leaderboards, such as Chatbot Arena, rank models based on thousands of human or AI preference comparisons. But how stable are these rankings really?
 
 We show that removing as little as 0.003% of preference data can flip the top of the leaderboard.
 To investigate this phenomenon, we introduce a fast approximation method that efficiently identifies the most influential preferences in Bradley–Terry (BT)–based ranking systems.
