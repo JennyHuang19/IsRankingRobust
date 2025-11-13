@@ -9,7 +9,7 @@ def run_logistic_regression(
     X: np.ndarray,
     y: np.ndarray,
     fit_intercept: bool = False,
-    penalty: str = None,
+    penalty: str = None, 
 ) -> LogisticRegression:
     """
     Fit a logistic regression model.
@@ -72,7 +72,7 @@ def isRankingRobust(k, alphaN, X, y, method = "IF", weighted = False):
         if sign_change_refit:
             return playerA, playerB, original_beta_diff, new_beta_diff_refit, indices
     
-    return -1, -1, -1, -1, [-1] # when ranking is robust.
+    return -1, -1, -1, -1, [-1] # return all-negative 1's when ranking is robust.
 
 class LogisticAMIP():
     def __init__(self, X: np.ndarray, y: np.ndarray, 
@@ -125,18 +125,18 @@ class LogisticAMIP():
             if self.weighted:
                 influence_unscaled = self.__IFcache__[dim]
                 actual_n = influence_unscaled.shape[0]//2
-                return influence_unscaled[:actual_n] + influence_unscaled[actual_n:] 
+                return influence_unscaled[:actual_n] + influence_unscaled[actual_n:] # never keep the weighted IF in the cache.
             return self.__IFcache__[dim]
         
         invH_col = self.__invH__[:, dim]                     # (p,)
         #    then each row X_i dot d gives a length-n vector
         influence_unscaled = self.__resid__ * (self.X @ invH_col) # (n,)
-        self.__IFcache__[dim] = influence_unscaled
+        self.__IFcache__[dim] = influence_unscaled # keep the unweighted influence scores in the cache.
         
         if self.weighted:
             actual_n = influence_unscaled.shape[0]//2
             #breakpoint()
-            return influence_unscaled[:actual_n] + influence_unscaled[actual_n:] # return sum of two duplicates
+            return influence_unscaled[:actual_n] + influence_unscaled[actual_n:] # return sum of two rows (1 corresponding to model 1 as player A and the other corresponding to model 1 as player B) as the influence score.
         return influence_unscaled
     
     def get_influence_1sN(self, dim):
